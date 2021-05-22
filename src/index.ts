@@ -1,6 +1,6 @@
 // @ts-ignore
 import { Engine, Rule, Fact, Almanac, RuleResult, Event } from 'json-rules-engine';
-import {IFactQuestion, ISolution, ISymptom, IRootCause} from "./types";
+import {FactQuestion, Solution, Symptom, RootCause} from "./types";
 
 const OPERATORS:{[key:string]:string} = {
     '==': 'equal',
@@ -11,34 +11,49 @@ const OPERATORS:{[key:string]:string} = {
 }
 
 export type QuestionCallback = {
-    (question:IFactQuestion): Promise<string|number>;
+    (question:FactQuestion): Promise<string|number>;
+}
+
+export type SolutionCallback = {
+    (solution:Solution): Promise<string>;
 }
 
 class Diagnostics {
     private readonly engine: Engine;
-    private readonly symptoms: ISymptom[];
+    private readonly symptoms: Symptom[];
     private readonly questions: {
-        [factId:string]: IFactQuestion
+        [factId:string]: FactQuestion
+    }
+    private factCreated: {
+        [factId:string]: boolean
     }
     private readonly solutions: {
-        [solutionId:string]: ISolution
+        [solutionId:string]: Solution
     }
     private rules: Rule[];
     private questionCallback:QuestionCallback;
+    private areYouAbleCallback:SolutionCallback;
+    private didItWorkCallback:SolutionCallback;
+    private factPriority:number;
 
-    public constructor (symptoms:ISymptom[], solutions:ISolution[], questions:IFactQuestion[], questionCallback:QuestionCallback) {
+    public constructor (symptoms:Symptom[], solutions:Solution[], questions:FactQuestion[],
+                        questionCallback:QuestionCallback, areYouAbleCallback:SolutionCallback, didItWorkCallback:SolutionCallback) {
         this.engine = new Engine([], {allowUndefinedFacts: false});
         this.symptoms = symptoms || [];
         this.solutions = {};
         this.questions = {};
+        this.factCreated = {};
         this.rules = [];
         this.questionCallback = questionCallback;
+        this.areYouAbleCallback = areYouAbleCallback;
+        this.didItWorkCallback = didItWorkCallback;
         solutions.forEach((solution) => {
             this.solutions[solution.id] = solution;
         });
         questions.forEach((question) => {
             this.questions[question.id] = question;
         });
+        this.factPriority = Object.keys(this.questions).length + (2 * Object.keys(this.solutions).length);
         this.parse();
     }
 
@@ -63,7 +78,8 @@ class Diagnostics {
     }
 
     private parse ():void {
-        this.symptoms.forEach((symptom) => {
+        const self = this;
+        self.symptoms.forEach((symptom) => {
             symptom.solutions && symptom.solutions.forEach((potential) => {
                 const solution = this.solutions[potential.solutionId];
                 if (solution) {
@@ -79,30 +95,33 @@ class Diagnostics {
                 }
             });
         });
-        this.addRules(this.rules);
+        self.addRules(self.rules);
+    }
 
-        for (let key in this.questions) {
-            const self = this;
+    private createFact(factId:string) {
+        const self = this;
+        if (factId && !self.factCreated[factId]) {
+            self.factCreated[factId] = true;
             // @ts-ignore
-            this.engine.addFact('fact:'+key, function (params, almanac) {
-                return new Promise<any> ((resolve, reject) => {
-                    const question = self.questions[key];
+            this.engine.addFact('fact:' + factId, function (params, almanac) {
+                return new Promise<any>((resolve, reject) => {
+                    const question = self.questions[factId];
                     if (question) {
                         return self.questionCallback(question).then((answer) => {
                             resolve(answer);
                         }, (reason) => {
                             reject(reason);
-                        })
-                    }
-                    else {
+                        });
+                    } else {
                         return reject();
                     }
-                })
-            })
+                });
+            }, {cache: true, priority: self.factPriority--});
         }
     }
 
-    private createRuleForSolution(symptom:ISymptom, solution:ISolution):Rule {
+    private createRuleForSolution(symptom:Symptom, solution:Solution):Rule {
+        const self = this;
         const rule: any = {};
         rule.name = symptom.name + ': ' + solution.name;
         rule.event = {
@@ -128,17 +147,45 @@ class Diagnostics {
                 operator: OPERATORS[condition.relationship] || condition.relationship,
                 value: condition.value
             });
+            self.createFact(condition.factId);
         });
         if (solution.askAreYouAble) {
-            rule.conditions.all.push({fact: 'able:' + solution.id, operator: 'equal', value: 'yes'})
+            rule.conditions.all.push({fact: 'able:' + solution.id, operator: 'equal', value: 'yes'});
+            if (!self.factCreated['able:' + solution.id]) {
+                self.factCreated['able:' + solution.id] = true;
+                // @ts-ignore
+                this.engine.addFact('able:' + solution.id, function (params, almanac) {
+                    return new Promise<any>((resolve, reject) => {
+                        return self.areYouAbleCallback(solution).then((answer) => {
+                            resolve(answer);
+                        }, (reason) => {
+                            reject(reason);
+                        });
+                    });
+                }, {cache: false, priority: self.factPriority--});
+            }
         }
         if (solution.askDidItWork) {
-            rule.conditions.all.push({fact: 'worked:' + solution.id, operator: 'equal', value: 'yes'})
+            rule.conditions.all.push({fact: 'worked:' + solution.id, operator: 'equal', value: 'yes'});
+            if (!self.factCreated['worked:' + solution.id]) {
+                self.factCreated['worked:' + solution.id] = true;
+                // @ts-ignore
+                this.engine.addFact('worked:' + solution.id, function (params, almanac) {
+                    return new Promise<any>((resolve, reject) => {
+                        return self.didItWorkCallback(solution).then((answer) => {
+                            resolve(answer);
+                        }, (reason) => {
+                            reject(reason);
+                        });
+                    });
+                }, {cache: false, priority: self.factPriority--});
+            }
         }
         return new Rule(rule);
     }
 
-    private createRuleForRootCause(symptom:ISymptom, cause:IRootCause, root:ISymptom):Rule {
+    private createRuleForRootCause(symptom:Symptom, cause:RootCause, root:Symptom):Rule {
+        const self = this;
         const rule: any = {};
         rule.name = symptom.name + ': ' + root.name;
         rule.event = {
@@ -164,6 +211,7 @@ class Diagnostics {
                 operator: OPERATORS[condition.relationship] || condition.relationship,
                 value: condition.value
             });
+            self.createFact(condition.factId);
         });
         return new Rule(rule);
     }
@@ -189,8 +237,8 @@ export {
     Fact,
     Almanac,
     RuleResult,
-    IFactQuestion,
-    ISolution,
-    ISymptom,
-    IRootCause
+    FactQuestion,
+    Solution,
+    Symptom,
+    RootCause
 }

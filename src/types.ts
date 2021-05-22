@@ -1,35 +1,35 @@
-interface IMediaInfo {
+interface MediaInfo {
     url: string;
     title: string;
     description: string;
 }
-interface ISolutionStep {
+interface SolutionStep {
     step: string;
 }
-export interface ICondition {
+export interface Condition {
     factId: string;
     relationship: string;
     value: string|boolean|number;
 }
-export interface IRootCause {
+export interface RootCause {
     symptomId: string;
-    conditions: ICondition[];
+    conditions: Condition[];
 }
-export interface IPotentialSolution {
+export interface PotentialSolution {
     solutionId: string;
 }
 
-export interface IFactQuestion {
+export interface FactQuestion {
     id: string;
     name: string;
     description?: string;
     questionType: 'yes-no'|'choose-one'|'number';
     questionText: string;
-    photos?: IMediaInfo[];
-    videos?: IMediaInfo[];
+    photos?: MediaInfo[];
+    videos?: MediaInfo[];
 }
 
-export interface ISolution {
+export interface Solution {
     id: string;
     name: string;
     description?: string;
@@ -37,18 +37,18 @@ export interface ISolution {
     askForPhotoBefore?: boolean;
     askForPhotoAfter?: boolean;
     askDidItWork?: boolean;
-    conditions: ICondition[];
-    instructions: ISolutionStep[];
-    photos?: IMediaInfo[];
-    videos?: IMediaInfo[];
+    conditions: Condition[];
+    instructions: SolutionStep[];
+    photos?: MediaInfo[];
+    videos?: MediaInfo[];
 }
 
-export interface ISymptom {
+export interface Symptom {
     id: string;
     name: string;
     description?: string;
-    solutions: IPotentialSolution[];
-    causes: IRootCause[];
-    photos?: IMediaInfo[];
-    videos?: IMediaInfo[];
+    solutions: PotentialSolution[];
+    causes: RootCause[];
+    photos?: MediaInfo[];
+    videos?: MediaInfo[];
 }

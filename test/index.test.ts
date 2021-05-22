@@ -1,12 +1,12 @@
 // @ts-ignore
 import {
     Diagnostics,
-    IFactQuestion,
-    ISolution,
-    ISymptom,
+    FactQuestion,
+    Solution,
+    Symptom,
 } from '../src/index';
 
-let symptoms:ISymptom[] = [
+let symptoms:Symptom[] = [
     {
         id: 'Symptom1',
         name: 'Water tastes bad',
@@ -17,7 +17,7 @@ let symptoms:ISymptom[] = [
     }
 ];
 
-let solutions:ISolution[] = [
+let solutions:Solution[] = [
     {
         id: 'Solution1',
         name: 'Change the filter',
@@ -28,23 +28,27 @@ let solutions:ISolution[] = [
                 value: 'yes'
             }
         ],
-        instructions: []
+        instructions: [],
+        askAreYouAble: true,
+        askDidItWork: true
     },
     {
         id: 'Solution2',
-        name: 'Change the filter',
+        name: 'Do something else',
         conditions: [
             {
                 factId: 'Question1',
                 relationship: '==',
-                value: 'yes'
+                value: 'no'
             }
         ],
-        instructions: []
+        instructions: [],
+        askAreYouAble: false,
+        askDidItWork: false
     }
 ];
 
-let questions:IFactQuestion[] = [
+let questions:FactQuestion[] = [
     {
         id: 'Question1',
         name: 'Spare filters',
@@ -59,7 +63,7 @@ let questions:IFactQuestion[] = [
     }
 ];
 
-const answerYes = async function (_question:IFactQuestion) {
+const answerYes = async function (_question:FactQuestion|Solution) {
     const promise = new Promise<string>((resolve, _reject) => {
         setTimeout(() => {
             resolve('yes');
@@ -68,7 +72,7 @@ const answerYes = async function (_question:IFactQuestion) {
     return promise;
 }
 
-const answerNo = async function (_question:IFactQuestion) {
+const answerNo = async function (_question:FactQuestion|Solution) {
     const promise = new Promise<string>((resolve, _reject) => {
         setTimeout(() => {
             resolve('no');
@@ -80,11 +84,11 @@ const answerNo = async function (_question:IFactQuestion) {
 
 describe('Test diagnostics', () => {
     it('can run a simple rulebase that succeeds', async() => {
-        const diagnostics = new Diagnostics(symptoms, solutions, questions, answerYes);
+        const diagnostics = new Diagnostics(symptoms, solutions, questions, answerYes, answerYes, answerYes);
         await diagnostics.run(['Symptom1'])
     });
     it('can run a simple rulebase that fails', async() => {
-        const diagnostics = new Diagnostics(symptoms, solutions, questions, answerNo);
+        const diagnostics = new Diagnostics(symptoms, solutions, questions, answerNo, answerYes, answerYes);
         await diagnostics.run(['Symptom1'])
     });
 });
