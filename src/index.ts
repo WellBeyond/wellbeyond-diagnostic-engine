@@ -63,7 +63,7 @@ class Diagnostics {
         return this;
     }
 
-    public async run(symptoms:[string]): Promise<void> {
+    public async run(symptoms:string[]): Promise<void> {
         this.engine.addFact('symptoms', symptoms);
 
         this.engine
