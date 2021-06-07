@@ -20,25 +20,29 @@ export type SolutionCallback = {
 
 class Diagnostics {
     private readonly engine: Engine;
-    private readonly symptoms: Symptom[];
-    private readonly questions: {
+    private symptoms: Symptom[] = [];
+    private questions: {
         [factId:string]: FactQuestion
-    }
+    } = {};
     private factCreated: {
         [factId:string]: boolean
-    }
-    private readonly solutions: {
+    } = {};
+    private solutions: {
         [solutionId:string]: Solution
-    }
-    private rules: Rule[];
-    private questionCallback:QuestionCallback;
-    private areYouAbleCallback:SolutionCallback;
-    private didItWorkCallback:SolutionCallback;
-    private factPriority:number;
+    } = {};
+    private rules: Rule[] = [];
+    private questionCallback?:QuestionCallback;
+    private areYouAbleCallback?:SolutionCallback;
+    private didItWorkCallback?:SolutionCallback;
+    private factPriority:number = 0;
+    public initialized = false;
 
-    public constructor (symptoms:Symptom[], solutions:Solution[], questions:FactQuestion[],
-                        questionCallback:QuestionCallback, areYouAbleCallback:SolutionCallback, didItWorkCallback:SolutionCallback) {
+    public constructor () {
         this.engine = new Engine([], {allowUndefinedFacts: false});
+    }
+
+    public initialize (symptoms:Symptom[], solutions:Solution[], questions:FactQuestion[],
+                        questionCallback:QuestionCallback, areYouAbleCallback:SolutionCallback, didItWorkCallback:SolutionCallback): Diagnostics {
         this.symptoms = symptoms || [];
         this.solutions = {};
         this.questions = {};
@@ -55,6 +59,8 @@ class Diagnostics {
         });
         this.factPriority = Object.keys(this.questions).length + (2 * Object.keys(this.solutions).length);
         this.parse();
+        this.initialized = true;
+        return this;
     }
 
     public async run(symptoms:[string]): Promise<void> {
@@ -106,7 +112,7 @@ class Diagnostics {
             this.engine.addFact('fact:' + factId, function (params, almanac) {
                 return new Promise<any>((resolve, reject) => {
                     const question = self.questions[factId];
-                    if (question) {
+                    if (question && self.questionCallback) {
                         return self.questionCallback(question).then((answer) => {
                             resolve(answer);
                         }, (reason) => {
@@ -156,11 +162,16 @@ class Diagnostics {
                 // @ts-ignore
                 this.engine.addFact('able:' + solution.id, function (params, almanac) {
                     return new Promise<any>((resolve, reject) => {
-                        return self.areYouAbleCallback(solution).then((answer) => {
-                            resolve(answer);
-                        }, (reason) => {
-                            reject(reason);
-                        });
+                        if (self.areYouAbleCallback) {
+                            return self.areYouAbleCallback(solution).then((answer) => {
+                                resolve(answer);
+                            }, (reason) => {
+                                reject(reason);
+                            });
+                        }
+                        else {
+                            return reject();
+                        }
                     });
                 }, {cache: false, priority: self.factPriority--});
             }
@@ -172,11 +183,16 @@ class Diagnostics {
                 // @ts-ignore
                 this.engine.addFact('worked:' + solution.id, function (params, almanac) {
                     return new Promise<any>((resolve, reject) => {
-                        return self.didItWorkCallback(solution).then((answer) => {
-                            resolve(answer);
-                        }, (reason) => {
-                            reject(reason);
-                        });
+                        if (self.didItWorkCallback) {
+                            return self.didItWorkCallback(solution).then((answer) => {
+                                resolve(answer);
+                            }, (reason) => {
+                                reject(reason);
+                            });
+                        }
+                        else {
+                            return reject();
+                        }
                     });
                 }, {cache: false, priority: self.factPriority--});
             }

@@ -84,11 +84,11 @@ const answerNo = async function (_question:FactQuestion|Solution) {
 
 describe('Test diagnostics', () => {
     it('can run a simple rulebase that succeeds', async() => {
-        const diagnostics = new Diagnostics(symptoms, solutions, questions, answerYes, answerYes, answerYes);
+        const diagnostics = new Diagnostics().initialize(symptoms, solutions, questions, answerYes, answerYes, answerYes);
         await diagnostics.run(['Symptom1'])
     });
     it('can run a simple rulebase that fails', async() => {
-        const diagnostics = new Diagnostics(symptoms, solutions, questions, answerNo, answerYes, answerYes);
+        const diagnostics = new Diagnostics().initialize(symptoms, solutions, questions, answerNo, answerYes, answerYes);
         await diagnostics.run(['Symptom1'])
     });
 });
