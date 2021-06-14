@@ -1,7 +1,7 @@
 // @ts-ignore
 import {
-    Diagnostics,
-    FactQuestion,
+    DiagnosticEngine,
+    Diagnostic,
     Solution,
     Symptom,
 } from '../src/index';
@@ -10,60 +10,56 @@ let symptoms:Symptom[] = [
     {
         id: 'Symptom1',
         name: 'Water tastes bad',
-        solutions: [
-            {solutionId: 'Solution1'}
+        rules: [
+            {
+                solutionId: 'Solution1',
+                systemTypes: [
+                    'Type1',
+                    'Type2'
+                ],
+                mustBeYes: [
+                    'Question1'
+                ],
+                mustBeNo: [
+
+                ]
+            }
         ],
-        causes: []
+        rootCauses: []
     }
 ];
 
 let solutions:Solution[] = [
     {
         id: 'Solution1',
+        symptomId: 'Symptom1',
         name: 'Change the filter',
-        conditions: [
-            {
-                factId: 'Question1',
-                relationship: '==',
-                value: 'yes'
-            }
-        ],
-        instructions: [],
-        askAreYouAble: true,
+        instructions: 'Take out the old and put in the new',
         askDidItWork: true
     },
     {
         id: 'Solution2',
+        symptomId: 'Symptom1',
         name: 'Do something else',
-        conditions: [
-            {
-                factId: 'Question1',
-                relationship: '==',
-                value: 'no'
-            }
-        ],
-        instructions: [],
-        askAreYouAble: false,
+        instructions: 'Just try anything',
         askDidItWork: false
     }
 ];
 
-let questions:FactQuestion[] = [
+let diagnostics:Diagnostic[] = [
     {
         id: 'Question1',
-        name: 'Spare filters',
-        questionText: 'Do you have spare filters?',
-        questionType: 'yes-no'
+        symptomId: 'Symptom1',
+        name: 'Do you have spare filters?'
     },
     {
         id: 'Question2',
-        name: 'Irrelevant',
-        questionText: 'Is this question relevant?',
-        questionType: 'yes-no'
+        symptomId: 'Symptom1',
+        name: 'Is this question relevant?'
     }
 ];
 
-const answerYes = async function (_question:FactQuestion|Solution) {
+const answerYes = async function (_question:Diagnostic|Solution) {
     const promise = new Promise<string>((resolve, _reject) => {
         setTimeout(() => {
             resolve('yes');
@@ -72,7 +68,7 @@ const answerYes = async function (_question:FactQuestion|Solution) {
     return promise;
 }
 
-const answerNo = async function (_question:FactQuestion|Solution) {
+const answerNo = async function (_question:Diagnostic|Solution) {
     const promise = new Promise<string>((resolve, _reject) => {
         setTimeout(() => {
             resolve('no');
@@ -84,12 +80,20 @@ const answerNo = async function (_question:FactQuestion|Solution) {
 
 describe('Test diagnostics', () => {
     it('can run a simple rulebase that succeeds', async() => {
-        const diagnostics = new Diagnostics().initialize(symptoms, solutions, questions, answerYes, answerYes, answerYes);
-        await diagnostics.run(['Symptom1'])
+        const engine = new DiagnosticEngine().initialize(symptoms, solutions, diagnostics, answerYes, answerYes);
+        await engine.run(['Symptom1'], ['Type1']);
     });
     it('can run a simple rulebase that fails', async() => {
-        const diagnostics = new Diagnostics().initialize(symptoms, solutions, questions, answerNo, answerYes, answerYes);
-        await diagnostics.run(['Symptom1'])
+        const engine = new DiagnosticEngine().initialize(symptoms, solutions, diagnostics, answerNo, answerYes);
+        await engine.run(['Symptom1'], ['Type1']);
+    });
+    it('can run another simple rulebase that fails', async() => {
+        const engine = new DiagnosticEngine().initialize(symptoms, solutions, diagnostics, answerYes, answerNo);
+        await engine.run(['Symptom1'], ['Type1']);
+    });
+    it('can run yet another simple rulebase that fails', async() => {
+        const engine = new DiagnosticEngine().initialize(symptoms, solutions, diagnostics, answerYes, answerYes);
+        await engine.run(['Symptom1'], ['TypeB']);
     });
 });
 

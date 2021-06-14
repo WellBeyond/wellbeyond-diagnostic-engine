@@ -3,42 +3,37 @@ interface MediaInfo {
     title: string;
     description: string;
 }
-interface SolutionStep {
-    step: string;
-}
-export interface Condition {
-    factId: string;
-    relationship: string;
-    value: string|boolean|number;
-}
-export interface RootCause {
+
+export interface PotentialRootCause {
     symptomId: string;
-    conditions: Condition[];
-}
-export interface PotentialSolution {
-    solutionId: string;
+    systemTypes?: string[];
+    mustBeNo?: string[];
+    mustBeYes?: string[];
 }
 
-export interface FactQuestion {
+export interface PotentialSolution {
+    solutionId: string;
+    systemTypes?: string[];
+    mustBeNo?: string[];
+    mustBeYes?: string[];
+}
+
+export interface Diagnostic {
     id: string;
+    symptomId: string;
     name: string;
-    description?: string;
-    questionType: 'yes-no'|'choose-one'|'number';
-    questionText: string;
     photos?: MediaInfo[];
     videos?: MediaInfo[];
 }
 
 export interface Solution {
     id: string;
+    symptomId: string;
     name: string;
-    description?: string;
-    askAreYouAble?: boolean;
     askForPhotoBefore?: boolean;
     askForPhotoAfter?: boolean;
     askDidItWork?: boolean;
-    conditions: Condition[];
-    instructions: SolutionStep[];
+    instructions?: string;
     photos?: MediaInfo[];
     videos?: MediaInfo[];
 }
@@ -47,8 +42,8 @@ export interface Symptom {
     id: string;
     name: string;
     description?: string;
-    solutions: PotentialSolution[];
-    causes: RootCause[];
+    rules: PotentialSolution[];
+    rootCauses: PotentialRootCause[];
     photos?: MediaInfo[];
     videos?: MediaInfo[];
 }

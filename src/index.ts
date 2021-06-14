@@ -1,70 +1,56 @@
 // @ts-ignore
 import { Engine, Rule, Fact, Almanac, RuleResult, Event } from 'json-rules-engine';
-import {FactQuestion, Solution, Symptom, RootCause} from "./types";
+import {Diagnostic, Solution, Symptom, PotentialSolution, PotentialRootCause} from "./types";
 
-const OPERATORS:{[key:string]:string} = {
-    '==': 'equal',
-    '<': 'lessThan',
-    '<=': 'lessThanInclusive',
-    '>': 'greaterThan',
-    '>=': 'greaterThanInclusive',
-}
-
-export type QuestionCallback = {
-    (question:FactQuestion): Promise<string|number>;
+export type DiagnosticCallback = {
+    (diagnostic:Diagnostic): Promise<string|number>;
 }
 
 export type SolutionCallback = {
     (solution:Solution): Promise<string>;
 }
 
-class Diagnostics {
+class DiagnosticEngine {
     private readonly engine: Engine;
     private symptoms: Symptom[] = [];
-    private questions: {
-        [factId:string]: FactQuestion
-    } = {};
-    private factCreated: {
-        [factId:string]: boolean
-    } = {};
     private solutions: {
         [solutionId:string]: Solution
     } = {};
+    private diagnostics: {
+        [diagnosticId:string]: Diagnostic
+    } = {};
+    private factCreated: {
+        [diagnosticId:string]: boolean
+    } = {};
     private rules: Rule[] = [];
-    private questionCallback?:QuestionCallback;
-    private areYouAbleCallback?:SolutionCallback;
-    private didItWorkCallback?:SolutionCallback;
-    private factPriority:number = 0;
+    private diagnosticCallback?:DiagnosticCallback;
+    private solutionCallback?:SolutionCallback;
+    private factPriority:number = 1000;
     public initialized = false;
 
     public constructor () {
         this.engine = new Engine([], {allowUndefinedFacts: false});
     }
 
-    public initialize (symptoms:Symptom[], solutions:Solution[], questions:FactQuestion[],
-                        questionCallback:QuestionCallback, areYouAbleCallback:SolutionCallback, didItWorkCallback:SolutionCallback): Diagnostics {
+    public initialize (symptoms:Symptom[], solutions:Solution[], diagnostics:Diagnostic[],
+                        diagnosticCallback:DiagnosticCallback, solutionCallback:SolutionCallback): DiagnosticEngine {
         this.symptoms = symptoms || [];
-        this.solutions = {};
-        this.questions = {};
-        this.factCreated = {};
-        this.rules = [];
-        this.questionCallback = questionCallback;
-        this.areYouAbleCallback = areYouAbleCallback;
-        this.didItWorkCallback = didItWorkCallback;
         solutions.forEach((solution) => {
             this.solutions[solution.id] = solution;
         });
-        questions.forEach((question) => {
-            this.questions[question.id] = question;
+        diagnostics.forEach((diagnostic) => {
+            this.diagnostics[diagnostic.id] = diagnostic;
         });
-        this.factPriority = Object.keys(this.questions).length + (2 * Object.keys(this.solutions).length);
+        this.diagnosticCallback = diagnosticCallback;
+        this.solutionCallback = solutionCallback;
         this.parse();
         this.initialized = true;
         return this;
     }
 
-    public async run(symptoms:string[]): Promise<void> {
+    public async run(symptoms:string[], systemTypes:string[]): Promise<void> {
         this.engine.addFact('symptoms', symptoms);
+        this.engine.addFact('systemTypes', systemTypes);
 
         this.engine
             .on('success', event => {
@@ -85,15 +71,24 @@ class Diagnostics {
 
     private parse ():void {
         const self = this;
+        self.engine.addOperator('containsOneOf', (factValue:string[], jsonValue:string[]) => {
+            if (!factValue || !factValue.length) return false;
+            if (!jsonValue || !jsonValue.length) return false;
+            let contains:boolean = false;
+            jsonValue.forEach(val => {
+                if (factValue.includes(val)) contains = true;
+            });
+            return contains;
+        })
         self.symptoms.forEach((symptom) => {
-            symptom.solutions && symptom.solutions.forEach((potential) => {
+            symptom.rules && symptom.rules.forEach((potential) => {
                 const solution = this.solutions[potential.solutionId];
                 if (solution) {
-                    const rule = this.createRuleForSolution(symptom, solution);
+                    const rule = this.createRuleForSolution(symptom, potential, solution);
                     this.rules.push(rule);
                 }
             });
-            symptom.causes && symptom.causes.forEach((cause) => {
+            symptom.rootCauses && symptom.rootCauses.forEach((cause) => {
                 const root = this.symptoms.find(s => s.id === cause.symptomId);
                 if (root) {
                     const rule = this.createRuleForRootCause(symptom, cause, root);
@@ -109,11 +104,11 @@ class Diagnostics {
         if (factId && !self.factCreated[factId]) {
             self.factCreated[factId] = true;
             // @ts-ignore
-            this.engine.addFact('fact:' + factId, function (params, almanac) {
+            this.engine.addFact(factId, function (params, almanac) {
                 return new Promise<any>((resolve, reject) => {
-                    const question = self.questions[factId];
-                    if (question && self.questionCallback) {
-                        return self.questionCallback(question).then((answer) => {
+                    const diagnostic = self.diagnostics[factId];
+                    if (diagnostic && self.diagnosticCallback) {
+                        return self.diagnosticCallback(diagnostic).then((answer) => {
                             resolve(answer);
                         }, (reason) => {
                             reject(reason);
@@ -126,7 +121,7 @@ class Diagnostics {
         }
     }
 
-    private createRuleForSolution(symptom:Symptom, solution:Solution):Rule {
+    private createRuleForSolution(symptom:Symptom, potential:PotentialSolution, solution:Solution):Rule {
         const self = this;
         const rule: any = {};
         rule.name = symptom.name + ': ' + solution.name;
@@ -138,70 +133,29 @@ class Diagnostics {
                 message: solution.name
             }
         }
-        rule.conditions = {
-            all: [
-                {
-                    fact: 'symptoms',
-                    operator: 'contains',
-                    value: symptom.id
-                }
-            ]
-        };
-        solution.conditions && solution.conditions.forEach((condition) => {
-            rule.conditions.all.push({
-                fact: 'fact:' + condition.factId,
-                operator: OPERATORS[condition.relationship] || condition.relationship,
-                value: condition.value
-            });
-            self.createFact(condition.factId);
-        });
-        if (solution.askAreYouAble) {
-            rule.conditions.all.push({fact: 'able:' + solution.id, operator: 'equal', value: 'yes'});
-            if (!self.factCreated['able:' + solution.id]) {
-                self.factCreated['able:' + solution.id] = true;
-                // @ts-ignore
-                this.engine.addFact('able:' + solution.id, function (params, almanac) {
-                    return new Promise<any>((resolve, reject) => {
-                        if (self.areYouAbleCallback) {
-                            return self.areYouAbleCallback(solution).then((answer) => {
-                                resolve(answer);
-                            }, (reason) => {
-                                reject(reason);
-                            });
-                        }
-                        else {
-                            return reject();
-                        }
-                    });
-                }, {cache: false, priority: self.factPriority--});
-            }
-        }
+        this.addConditions(rule, symptom, potential);
         if (solution.askDidItWork) {
-            rule.conditions.all.push({fact: 'worked:' + solution.id, operator: 'equal', value: 'yes'});
-            if (!self.factCreated['worked:' + solution.id]) {
-                self.factCreated['worked:' + solution.id] = true;
-                // @ts-ignore
-                this.engine.addFact('worked:' + solution.id, function (params, almanac) {
-                    return new Promise<any>((resolve, reject) => {
-                        if (self.didItWorkCallback) {
-                            return self.didItWorkCallback(solution).then((answer) => {
-                                resolve(answer);
-                            }, (reason) => {
-                                reject(reason);
-                            });
-                        }
-                        else {
-                            return reject();
-                        }
-                    });
-                }, {cache: false, priority: self.factPriority--});
-            }
+            rule.conditions.all.push({fact: solution.id, operator: 'equal', value: 'yes'});
+            // @ts-ignore
+            this.engine.addFact(solution.id, function (params, almanac) {
+                return new Promise<any>((resolve, reject) => {
+                    if (self.solutionCallback) {
+                        return self.solutionCallback(solution).then((answer) => {
+                            resolve(answer);
+                        }, (reason) => {
+                            reject(reason);
+                        });
+                    }
+                    else {
+                        return reject();
+                    }
+                });
+            }, {cache: false, priority: self.factPriority--});
         }
         return new Rule(rule);
     }
 
-    private createRuleForRootCause(symptom:Symptom, cause:RootCause, root:Symptom):Rule {
-        const self = this;
+    private createRuleForRootCause(symptom:Symptom, potential:PotentialRootCause, root:Symptom):Rule {
         const rule: any = {};
         rule.name = symptom.name + ': ' + root.name;
         rule.event = {
@@ -212,6 +166,12 @@ class Diagnostics {
                 message: root.name
             }
         }
+        this.addConditions(rule, symptom, potential);
+        return new Rule(rule);
+    }
+
+    private addConditions (rule:any, symptom:Symptom, potential:PotentialRootCause|PotentialSolution):void {
+        const self = this;
         rule.conditions = {
             all: [
                 {
@@ -221,15 +181,34 @@ class Diagnostics {
                 }
             ]
         };
-        cause.conditions && cause.conditions.forEach((condition) => {
-            rule.conditions.all.push({
-                fact: 'ask:' + condition.factId,
-                operator: OPERATORS[condition.relationship] || condition.relationship,
-                value: condition.value
+        if (potential.systemTypes && potential.systemTypes.length) {
+            rule.conditions.all.push(
+                {
+                    fact: 'systemTypes',
+                    operator: 'containsOneOf',
+                    value: potential.systemTypes
+                });
+        }
+        if (potential.mustBeYes) {
+            potential.mustBeYes.forEach((diagnosticId) => {
+                rule.conditions.all.push(
+                    {
+                        fact: diagnosticId,
+                        operator: 'equal',
+                        value: 'yes'
+                    });
+                self.createFact(diagnosticId);
             });
-            self.createFact(condition.factId);
+        }
+        potential.mustBeNo && potential.mustBeNo.forEach((diagnosticId) => {
+            rule.conditions.all.push(
+                {
+                    fact: diagnosticId,
+                    operator: 'equal',
+                    value: 'no'
+                });
+            self.createFact(diagnosticId);
         });
-        return new Rule(rule);
     }
 
     private addRules (rules:Rule[] = []):void {
@@ -247,14 +226,13 @@ class Diagnostics {
 }
 
 export {
-    Diagnostics,
+    DiagnosticEngine,
     Engine,
     Rule,
     Fact,
     Almanac,
     RuleResult,
-    FactQuestion,
+    Diagnostic,
     Solution,
-    Symptom,
-    RootCause
+    Symptom
 }
