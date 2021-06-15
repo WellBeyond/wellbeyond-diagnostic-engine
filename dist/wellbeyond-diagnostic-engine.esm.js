@@ -33,8 +33,14 @@ class DiagnosticEngine {
   }
 
   async run(symptoms, systemTypes) {
-    this.engine.addFact('symptoms', symptoms);
-    this.engine.addFact('systemTypes', systemTypes);
+    this.engine.addFact('symptoms', symptoms, {
+      cache: true,
+      priority: 99999
+    });
+    this.engine.addFact('systemTypes', systemTypes, {
+      cache: true,
+      priority: 99999
+    });
     this.engine.on('success', event => {
       console.log('success', event);
     }).on('failure', event => {
@@ -89,6 +95,7 @@ class DiagnosticEngine {
       this.engine.addFact(factId, function (params, almanac) {
         return new Promise((resolve, reject) => {
           const diagnostic = self.diagnostics[factId];
+          console.log('Asking question ...', diagnostic);
 
           if (diagnostic && self.diagnosticCallback) {
             return self.diagnosticCallback(diagnostic).then(answer => {
@@ -131,6 +138,7 @@ class DiagnosticEngine {
       this.engine.addFact(solution.id, function (params, almanac) {
         return new Promise((resolve, reject) => {
           if (self.solutionCallback) {
+            console.log('Checking to see if this worked...', solution);
             return self.solutionCallback(solution).then(answer => {
               resolve(answer);
             }, reason => {
