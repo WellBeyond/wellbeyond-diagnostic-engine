@@ -42,6 +42,7 @@ export interface Symptom {
     id: string;
     name: string;
     description?: string;
+    systemTypeIds?: string[];
     rules: PotentialSolution[];
     rootCauses: PotentialRootCause[];
     photos?: MediaInfo[];
