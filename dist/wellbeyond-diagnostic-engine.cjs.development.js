@@ -62,11 +62,11 @@ class DiagnosticEngine {
     }).on('addSymptom', event => {
       console.log('addSymptom', event);
 
-      if (event.symptomId) {
-        const index = self.currentSymptoms.indexOf(event.symptomId);
+      if (event.causeId) {
+        const index = self.currentSymptoms.indexOf(event.causeId);
 
         if (index == -1) {
-          self.currentSymptoms.push(event.symptomId);
+          self.currentSymptoms.push(event.causeId);
         }
       }
     }).on('success', event => {
@@ -142,7 +142,7 @@ class DiagnosticEngine {
     const rule = {};
     rule.name = symptom.name + ': ' + solution.name;
     rule.event = {
-      type: 'solved',
+      type: solution.askDidItWork ? 'solved' : 'deferred',
       params: {
         symptomId: symptom.id,
         solutionId: solution.id,
