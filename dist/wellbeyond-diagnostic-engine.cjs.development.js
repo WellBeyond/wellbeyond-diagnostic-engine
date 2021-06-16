@@ -12,6 +12,7 @@ class DiagnosticEngine {
     this.solutions = {};
     this.diagnostics = {};
     this.factCreated = {};
+    this.currentSymptoms = [];
     this.rules = [];
     this.factPriority = 1000;
     this.initialized = false;
@@ -36,25 +37,44 @@ class DiagnosticEngine {
   }
 
   async run(symptoms, systemTypes) {
-    this.engine.addFact('symptoms', symptoms, {
+    const self = this;
+    self.currentSymptoms = symptoms;
+    self.engine.addFact('symptoms', (_params, _almanac) => {
+      return self.currentSymptoms;
+    }, {
+      cache: false,
+      priority: 99999
+    });
+    self.engine.addFact('systemTypes', systemTypes, {
       cache: true,
       priority: 99999
     });
-    this.engine.addFact('systemTypes', systemTypes, {
-      cache: true,
-      priority: 99999
-    });
-    this.engine.on('success', event => {
+    self.engine.on('solved', event => {
+      console.log('solved', event);
+
+      if (event.symptomId) {
+        const index = self.currentSymptoms.indexOf(event.symptomId);
+
+        if (index > -1) {
+          self.currentSymptoms.splice(index, 1);
+        }
+      }
+    }).on('addSymptom', event => {
+      console.log('addSymptom', event);
+
+      if (event.symptomId) {
+        const index = self.currentSymptoms.indexOf(event.symptomId);
+
+        if (index == -1) {
+          self.currentSymptoms.push(event.symptomId);
+        }
+      }
+    }).on('success', event => {
       console.log('success', event);
     }).on('failure', event => {
       console.log('failure', event);
     });
-
-    try {
-      await this.engine.run();
-    } catch (e) {
-      console.log(e);
-    }
+    return this.engine.run();
   }
 
   parse() {
@@ -89,7 +109,7 @@ class DiagnosticEngine {
     self.addRules(self.rules);
   }
 
-  createFact(factId) {
+  createDiagnosticFact(factId) {
     const self = this;
 
     if (factId && !self.factCreated[factId]) {
@@ -200,7 +220,7 @@ class DiagnosticEngine {
           operator: 'equal',
           value: 'yes'
         });
-        self.createFact(diagnosticId);
+        self.createDiagnosticFact(diagnosticId);
       });
     }
 
@@ -210,7 +230,7 @@ class DiagnosticEngine {
         operator: 'equal',
         value: 'no'
       });
-      self.createFact(diagnosticId);
+      self.createDiagnosticFact(diagnosticId);
     });
   }
 

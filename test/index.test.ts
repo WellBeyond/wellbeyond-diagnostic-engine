@@ -4,6 +4,7 @@ import {
     Diagnostic,
     Solution,
     Symptom,
+    EngineResult
 } from '../src/index';
 
 let symptoms:Symptom[] = [
@@ -81,19 +82,23 @@ const answerNo = async function (_question:Diagnostic|Solution) {
 describe('Test diagnostics', () => {
     it('can run a simple rulebase that succeeds', async() => {
         const engine = new DiagnosticEngine().initialize(symptoms, solutions, diagnostics, answerYes, answerYes);
-        await engine.run(['Symptom1'], ['Type1']);
+        const result:EngineResult = await engine.run(['Symptom1'], ['Type1']);
+        console.log(result);
     });
     it('can run a simple rulebase that fails', async() => {
         const engine = new DiagnosticEngine().initialize(symptoms, solutions, diagnostics, answerNo, answerYes);
-        await engine.run(['Symptom1'], ['Type1']);
+        const result:EngineResult = await engine.run(['Symptom1'], ['Type1']);
+        console.log(result);
     });
     it('can run another simple rulebase that fails', async() => {
         const engine = new DiagnosticEngine().initialize(symptoms, solutions, diagnostics, answerYes, answerNo);
-        await engine.run(['Symptom1'], ['Type1']);
+        const result:EngineResult = await engine.run(['Symptom1'], ['Type1']);
+        console.log(result);
     });
     it('can run yet another simple rulebase that fails', async() => {
         const engine = new DiagnosticEngine().initialize(symptoms, solutions, diagnostics, answerYes, answerYes);
-        await engine.run(['Symptom1'], ['TypeB']);
+        const result:EngineResult = await engine.run(['Symptom1'], ['TypeB']);
+        console.log(result);
     });
 });
 

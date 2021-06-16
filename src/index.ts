@@ -1,5 +1,5 @@
 // @ts-ignore
-import { Engine, Rule, Fact, Almanac, RuleResult, Event } from 'json-rules-engine';
+import { Engine, Rule, Fact, Almanac, RuleResult, Event, EngineResult } from 'json-rules-engine';
 import {Diagnostic, Solution, Symptom, PotentialSolution, PotentialRootCause} from "./types";
 
 export type DiagnosticCallback = {
@@ -22,6 +22,7 @@ class DiagnosticEngine {
     private factCreated: {
         [diagnosticId:string]: boolean
     } = {};
+    private currentSymptoms: string[] = [];
     private rules: Rule[] = [];
     private diagnosticCallback?:DiagnosticCallback;
     private solutionCallback?:SolutionCallback;
@@ -48,24 +49,41 @@ class DiagnosticEngine {
         return this;
     }
 
-    public async run(symptoms:string[], systemTypes:string[]): Promise<void> {
-        this.engine.addFact('symptoms', symptoms, { cache: true, priority: 99999 });
-        this.engine.addFact('systemTypes', systemTypes, { cache: true, priority: 99999 });
+    public async run(symptoms:string[], systemTypes:string[]): Promise<EngineResult> {
+        const self = this;
+        self.currentSymptoms = symptoms;
+        self.engine.addFact('symptoms', (_params, _almanac) => {
+            return self.currentSymptoms;
+        }, { cache: false, priority: 99999 });
+        self.engine.addFact('systemTypes', systemTypes, { cache: true, priority: 99999 });
 
-        this.engine
+        self.engine
+            .on('solved', (event:any) => {
+                console.log('solved', event);
+                if (event.symptomId) {
+                    const index = self.currentSymptoms.indexOf(event.symptomId);
+                    if (index > -1) {
+                        self.currentSymptoms.splice(index, 1);
+                    }
+                }
+            })
+            .on('addSymptom', (event:any) => {
+                console.log('addSymptom', event);
+                if (event.symptomId) {
+                    const index = self.currentSymptoms.indexOf(event.symptomId);
+                    if (index == -1) {
+                        self.currentSymptoms.push(event.symptomId);
+                    }
+                }
+            })
             .on('success', event => {
-                console.log('success', event)
+                console.log('success', event);
             })
             .on('failure', event => {
-                console.log('failure', event)
+                console.log('failure', event);
             });
 
-        try {
-            await this.engine.run();
-        }
-        catch (e) {
-            console.log(e);
-        }
+        return this.engine.run();
 
     }
 
@@ -99,7 +117,7 @@ class DiagnosticEngine {
         self.addRules(self.rules);
     }
 
-    private createFact(factId:string) {
+    private createDiagnosticFact(factId:string) {
         const self = this;
         if (factId && !self.factCreated[factId]) {
             self.factCreated[factId] = true;
@@ -199,7 +217,7 @@ class DiagnosticEngine {
                         operator: 'equal',
                         value: 'yes'
                     });
-                self.createFact(diagnosticId);
+                self.createDiagnosticFact(diagnosticId);
             });
         }
         potential.mustBeNo && potential.mustBeNo.forEach((diagnosticId) => {
@@ -209,7 +227,7 @@ class DiagnosticEngine {
                     operator: 'equal',
                     value: 'no'
                 });
-            self.createFact(diagnosticId);
+            self.createDiagnosticFact(diagnosticId);
         });
     }
 
@@ -229,6 +247,7 @@ class DiagnosticEngine {
 
 export {
     DiagnosticEngine,
+    EngineResult,
     Engine,
     Rule,
     Fact,
