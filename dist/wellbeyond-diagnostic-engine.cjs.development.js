@@ -150,33 +150,29 @@ class DiagnosticEngine {
       }
     };
     this.addConditions(rule, symptom, potential);
+    rule.conditions.all.push({
+      fact: solution.id,
+      operator: 'equal',
+      value: 'yes'
+    }); // @ts-ignore
 
-    if (solution.askDidItWork) {
-      rule.conditions.all.push({
-        fact: solution.id,
-        operator: 'equal',
-        value: 'yes'
-      }); // @ts-ignore
-
-      this.engine.addFact(solution.id, function (params, almanac) {
-        return new Promise((resolve, reject) => {
-          if (self.solutionCallback) {
-            console.log('Checking to see if this worked...', solution);
-            return self.solutionCallback(solution).then(answer => {
-              resolve(answer);
-            }, reason => {
-              reject(reason);
-            });
-          } else {
-            return reject();
-          }
-        });
-      }, {
-        cache: false,
-        priority: self.factPriority--
+    this.engine.addFact(solution.id, function (params, almanac) {
+      return new Promise((resolve, reject) => {
+        if (self.solutionCallback) {
+          console.log('Checking to see if this worked...', solution);
+          return self.solutionCallback(solution).then(answer => {
+            resolve(answer);
+          }, reason => {
+            reject(reason);
+          });
+        } else {
+          return reject();
+        }
       });
-    }
-
+    }, {
+      cache: false,
+      priority: self.factPriority--
+    });
     return new jsonRulesEngine.Rule(rule);
   }
 
