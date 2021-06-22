@@ -19,6 +19,7 @@ export interface Diagnostic {
     id: string;
     symptomId: string;
     name: string;
+    instructions?: string;
     photos?: MediaInfo[];
     videos?: MediaInfo[];
 }
@@ -26,7 +27,6 @@ export interface Solution {
     id: string;
     symptomId: string;
     name: string;
-    askForPhotoBefore?: boolean;
     askForPhotoAfter?: boolean;
     askDidItWork?: boolean;
     instructions?: string;
