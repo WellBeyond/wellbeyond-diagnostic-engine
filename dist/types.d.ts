@@ -42,5 +42,6 @@ export interface Symptom {
     rootCauses: PotentialRootCause[];
     photos?: MediaInfo[];
     videos?: MediaInfo[];
+    hidden?: boolean;
 }
 export {};
